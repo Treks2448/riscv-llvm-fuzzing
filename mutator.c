@@ -1,5 +1,5 @@
-//#include "afl-fuzz.h"
-#include "expr-tree.h"
+#include "afl-fuzz.h"
+#include "expr-mut.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -36,11 +36,11 @@ my_mutator_t *afl_custom_init(afl_state_t *afl, unsigned int seed) {
 size_t afl_custom_fuzz(my_mutator_t *data, uint8_t *buf, size_t buf_size, 
 		       u8 **out_buf, uint8_t *add_buf, 
 		       size_t add_buf_size, size_t max_size) {
-	size_t mutated_size = DATA_SIZE <= max_size ? DATA_SIZE : max_size;
+	//size_t mutated_size = DATA_SIZE <= max_size ? DATA_SIZE : max_size;
 
-	memcpy(data->mutated_out, buf, buf_size);
+	//memcpy(data->mutated_out, buf, buf_size);
 
-	memcpy(data->mutated_out, commands[rand() % 3], 3);
+	//memcpy(data->mutated_out, commands[rand() % 3], 3);
 }
 
 
