@@ -1,8 +1,9 @@
 #include "expr-mut.h"
 
 #include <stdio.h>
-#include <inttypes.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 
 #define MAX_FILE 8192
 
@@ -19,7 +20,8 @@ my_mutator_t *afl_custom_init(unsigned int seed) {
 		perror("afl_custom_int allocation failure");
 		return NULL;
 	}
-
+	
+	/* TODO: allocating max file size makes it harder to insert data into the buffer */
 	if ((mutator->mutated_out = (uint8_t*)malloc(MAX_FILE)) == NULL) {
 		perror("afl_custom_init memory allocation failure");
 		return NULL;
@@ -30,6 +32,45 @@ my_mutator_t *afl_custom_init(unsigned int seed) {
 	return mutator;
 }
 
+/* Inserts data into the buffer. Data following insertion is displaced 
+ * by size of inserted data. The buffer size is increased accordingly. */
+void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos
+		 uint8_t *new_data, size_t new_data_size) {
+	/* Increase buffer size to accomodate for inserted data */
+	*buf_size += new_data_size;
+	*buf = (uint8_t)realloc(*buf, *buf_size);
+	if (*buf == NULL) {
+		printf("data insertion failure");
+		return;
+	}
+	
+	/* Make space for inserted data */
+	memmove(*buf + insert_pos + new_data_size, 
+		*buf + insert_pos,
+		*buf_size - insert_pos - new_data_size);
+
+	/* Insert data into buffer */	
+	memcpy(*buf + insert_pos, new_data, new_data_size);
+}
+
+/* Finds string in buffer and returns its location */
+int findString(uint8_t *buf, size_t buf_size, const char *search_str) {
+	size_t search_str_len = strlen(search_str);	
+	for (size_t i = 0; i <= buf_size - search_str_len; i++)
+		if (memcmp(buf + i, search_str, search_str_len) == 0)
+			return (int)i;
+	return -1;
+}
+
+/* Deletes specified number of bytes from buffer at start location */
+void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes) {
+	size_t n_to_del = start + n_bytes > buf_size ? buf_size - start : n_bytes;
+	uint8_t *src = buf + start + n_to_del;
+	uint8_t *dest = buf + start;
+	size_t n_shift = buf_size - start - n_to_del;
+	memmove(dest, src, n_shift);
+}
+
 size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size, 
 		       uint8_t **out_buf, uint8_t *add_buf, 
 		       size_t add_buf_size, size_t max_size) {
@@ -38,8 +79,24 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 	
 	memcpy(mutator->mutated_out, buf, buf_size);
 
-	printf("%s\n", mutator->mutated_out);
+	/* find each variable and its type in the file (buffer) */
+
+	/* for each found variable
+	 * 	set its type
+	 * 	generate and set its value
+	 * 	write new type and value to the buffer (as hex ideally)
+	 */
+
+	/* find the result variable and set its type (write to file) */
+
+	/* find the beginning of the expression in the file */
 	
+	/* extract the expression as a string */
+
+	/* process expression using expr-mut */
+	/* overwrite the expression with the processed expression */
+
+	printf("%s\n", mutator->mutated_out);	
 	//memcpy(data->mutated_out, commands[rand() % 3], 3);
 	return mutated_size;
 }
