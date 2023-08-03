@@ -1,68 +1,54 @@
+#include "expr-mut.h"
+
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdlib.h>
 
-/* #include <clang-c/Index.h> */
+#define MAX_FILE 8192
 
-#define uint32_1s uint32_t 0xffffffff
-#define uint32_half_1s uint32_t 0x0000ffff
-#define uint64_1s uint64_t 0xffffffffffffffff
-#define uint64_half_1s uint64_t 0x00000000ffffffff
+typedef struct my_mutator {
+	MutatorState *mutator_state;
+	uint8_t *mutated_out;
+} my_mutator_t;
 
-/*
-void print_cursor(CXCursor cursor, int depth) {
-	for (int i = 0; i < depth; i++) {
-		printf("  ");
+my_mutator_t *afl_custom_init(unsigned int seed) {
+	srand(seed);
+
+	my_mutator_t *mutator = calloc(1, sizeof(my_mutator_t));
+	if (!mutator) {
+		perror("afl_custom_int allocation failure");
+		return NULL;
 	}
 
-	CXString kindName = clang_getCursorKindSpelling(clang_getCursorKind(cursor));
-	CXString cursorSpelling = clang_getCursorSpelling(cursor);
-	printf("%s: %s\n", clang_getCString(kindName), clang_getCString(cursorSpelling));
-}
-
-enum CXChildVisitResult visit(CXCursor cursor, CXCursor parent, CXClientData client_data) {
-	int* depth = (int*)client_data;
-	print_cursor(cursor, *depth);
-
-	(*depth)++;
-	clang_visitChildren(cursor, visit, depth);
-	(*depth)--;
-
-	return CXChildVisit_Continue;
-}
-*/
-
-void afl_custom_fuzz(uint8_t *buf, size_t buf_size) {
-	struct CXUnsavedFile virt_file  = {
-		.Filename = "virt_file.c",
-		.Contents = (char *)buf,	
-		.Length = buf_size
-	};
-
-	CXIndex idx = clang_createIndex(0, 0);
-	CXTranslationUnit unit = clang_parseTranslationUnit(
-		idx, "virt_file.c",
-		NULL, 0,
-		&virt_file, 1,
-		CXTranslationUnit_None);
-	if (unit == NULL) {
-		printf("Unable to parse translation unit\n");
-		return;
+	if ((mutator->mutated_out = (uint8_t*)malloc(MAX_FILE)) == NULL) {
+		perror("afl_custom_init memory allocation failure");
+		return NULL;
 	}
 
-	CXCursor cursor = clang_getTranslationUnitCursor(unit);
-	int depth = 0;
-	//clang_visitChildren(cursor, visit, &depth);
+	mutator->mutator_state = newMutatorState();
 
-	clang_disposeTranslationUnit(unit);
-	clang_disposeIndex(idx);
+	return mutator;
+}
+
+size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size, 
+		       uint8_t **out_buf, uint8_t *add_buf, 
+		       size_t add_buf_size, size_t max_size) {
+	
+	size_t mutated_size = max_size; /*TODO: temporary size */
+	
+	memcpy(mutator->mutated_out, buf, buf_size);
+
+	printf("%s\n", mutator->mutated_out);
+	
+	//memcpy(data->mutated_out, commands[rand() % 3], 3);
+	return mutated_size;
 }
 
 int main(int argc, char** argv) {
 	FILE *file = NULL;
 	long length = -1;
 
-	file = fopen("test.c", "r");
+	file = fopen("example-file.c", "r");
 	if (file == NULL) {
 		printf("Failed to open the file\n");	
 		return 1;
@@ -90,7 +76,11 @@ int main(int argc, char** argv) {
 	}
 	file_buf[length] = 0;
 
-	afl_custom_fuzz((uint8_t*)file_buf, (size_t)length);
+	uint8_t *out_buf;
+	my_mutator_t *mutator = afl_custom_init(1);
+	size_t out_size = afl_custom_fuzz(mutator, (uint8_t*)file_buf, 
+			(size_t)length, &out_buf, 
+			NULL, 0, 8192);
 
 	fclose(file);
 
