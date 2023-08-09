@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include <string.h>
 
+typedef uint8_t u8;
+typedef uint8_t afl_state_t;
+
 typedef struct my_mutator {
 	afl_state_t *afl;
 	
@@ -12,16 +15,19 @@ typedef struct my_mutator {
 	int trimming_steps;
 	int cur_step;
 
+	u8 *post_process_buf;
+	u8 *trim_buf;
+
 	MutatorState *mutator_state;
 
-	uint8_t *mutated_out;
+	u8 *mutated_out;
 	long unsigned int mutated_out_size;
 } my_mutator_t;
 
-void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
-		uint8_t *new_data, size_t new_data_size);
-int findString(uint8_t *buf, size_t buf_size, const char *search_str, size_t start_pos);
-void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes);
+void insertData(u8 **buf, size_t *buf_size, size_t insert_pos,
+		u8 *new_data, size_t new_data_size);
+int findString(u8 *buf, size_t buf_size, const char *search_str, size_t start_pos);
+void deleteFromBuf(u8 *buf, size_t buf_size, size_t start, size_t n_bytes);
 
 my_mutator_t *afl_custom_init(afl_state_t *afl, unsigned int seed) {
 	srand(seed);
@@ -43,12 +49,12 @@ my_mutator_t *afl_custom_init(afl_state_t *afl, unsigned int seed) {
 	return mutator;
 }
 
-size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
-		       uint8_t **out_buf, uint8_t *add_buf, 
+size_t afl_custom_fuzz(my_mutator_t *mutator, u8 *buf, size_t buf_size,
+		       u8 **out_buf, u8 *add_buf, 
 		       size_t add_buf_size, size_t max_size) {
 		
 	/*TODO: double check that correct number of bytes are allocated */	
-	mutator->mutated_out = (uint8_t*)malloc(buf_size + 1);
+	mutator->mutated_out = (u8*)malloc(buf_size + 1);
 	mutator->mutated_out_size = buf_size;
 	memcpy(mutator->mutated_out, buf, buf_size);	
 	
@@ -95,7 +101,7 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 		
 		/* Insert string into file buffer */	
 		insertData(&mutator->mutated_out, &mutator->mutated_out_size,
-			   (size_t)cursor, (uint8_t*)line, (size_t)line_strlen);
+			   (size_t)cursor, (u8*)line, (size_t)line_strlen);
 
 		cursor += line_strlen; 
 
@@ -112,7 +118,7 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 	strcat(line, " ");
 	strcat(line, "result;\n\t");
 	insertData(&mutator->mutated_out, &mutator->mutated_out_size, 
-		   (size_t)cursor, (uint8_t*)line, (size_t)strlen(line));
+		   (size_t)cursor, (u8*)line, (size_t)strlen(line));
 	cursor += strlen(line);
 	free(line);	
 
@@ -148,7 +154,7 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 	deleteFromBuf(mutator->mutated_out, mutator->mutated_out_size, 
 		      expr_begin , expr_end - expr_begin);
 	insertData(&mutator->mutated_out, &mutator->mutated_out_size, 
-		   (size_t)expr_begin, (uint8_t*)mutated_expr, (size_t)mutated_expr_strln);
+		   (size_t)expr_begin, (u8*)mutated_expr, (size_t)mutated_expr_strln);
 
 	free(mutated_expr);
 	free(cleaned_expr);
@@ -197,9 +203,9 @@ int main(int argc, char** argv) {
 	}
 	file_buf[length] = 0;
 
-	uint8_t *out_buf;
-	my_mutator_t *mutator = afl_custom_init(1);
-	size_t out_size = afl_custom_fuzz(mutator, (uint8_t*)file_buf, 
+	u8 *out_buf;
+	my_mutator_t *mutator = afl_custom_init(NULL,1);
+	size_t out_size = afl_custom_fuzz(mutator, (u8*)file_buf, 
 			(size_t)(length+1), &out_buf, 
 			NULL, 0, 8192);
 
@@ -215,11 +221,11 @@ void afl_custom_deinit(my_mutator_t *mutator) {
 
 /* Inserts data into the buffer. Data following insertion is displaced 
  * by size of inserted data. The buffer size is increased accordingly. */
-void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
-		uint8_t *new_data, size_t new_data_size) {
+void insertData(u8 **buf, size_t *buf_size, size_t insert_pos,
+		u8 *new_data, size_t new_data_size) {
 	/* Increase buffer size to accomodate for inserted data */
 	*buf_size += new_data_size;
-	*buf = (uint8_t*)realloc(*buf, *buf_size);
+	*buf = (u8*)realloc(*buf, *buf_size);
 	if (*buf == NULL) {
 		printf("data insertion failure");
 		return;
@@ -235,7 +241,7 @@ void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
 }
 
 /* Finds string in buffer and returns its location */
-int findString(uint8_t *buf, size_t buf_size, const char *search_str, size_t start_pos) {
+int findString(u8 *buf, size_t buf_size, const char *search_str, size_t start_pos) {
 	size_t search_str_len = strlen(search_str);	
 	for (size_t i = start_pos; i <= buf_size - search_str_len; i++)
 		if (memcmp(buf + i, search_str, search_str_len) == 0)
@@ -244,10 +250,10 @@ int findString(uint8_t *buf, size_t buf_size, const char *search_str, size_t sta
 }
 
 /* Deletes specified number of bytes from buffer at start location */
-void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes) {
+void deleteFromBuf(u8 *buf, size_t buf_size, size_t start, size_t n_bytes) {
 	size_t n_to_del = start + n_bytes > buf_size ? buf_size - start : n_bytes;
-	uint8_t *src = buf + start + n_to_del;
-	uint8_t *dest = buf + start;
+	u8 *src = buf + start + n_to_del;
+	u8 *dest = buf + start;
 	size_t n_shift = buf_size - start - n_to_del;
 	memmove(dest, src, n_shift);
 }
