@@ -880,7 +880,7 @@ char *intTypeToStr(OperandDataType type) {
 		case UI32:
 			return "uint32_t";	
 		case UI64:
-			return "uint64_t"
+			return "uint64_t";
 		/* Signed */
 		case I8:
 			return "int8_t";

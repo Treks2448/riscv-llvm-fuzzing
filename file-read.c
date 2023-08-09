@@ -10,7 +10,13 @@
 typedef struct my_mutator {
 	MutatorState *mutator_state;
 	uint8_t *mutated_out;
+	long unsigned int mutated_out_size;
 } my_mutator_t;
+
+void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
+		uint8_t *new_data, size_t new_data_size);
+int findString(uint8_t *buf, size_t buf_size, const char *search_str, size_t start_pos);
+void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes);
 
 my_mutator_t *afl_custom_init(unsigned int seed) {
 	srand(seed);
@@ -20,74 +26,83 @@ my_mutator_t *afl_custom_init(unsigned int seed) {
 		perror("afl_custom_int allocation failure");
 		return NULL;
 	}
-	
-	/* TODO: allocating max file size makes it harder to insert data into the buffer */
+	/*	
 	if ((mutator->mutated_out = (uint8_t*)malloc(MAX_FILE)) == NULL) {
 		perror("afl_custom_init memory allocation failure");
 		return NULL;
 	}
+	*/
 
 	mutator->mutator_state = newMutatorState();
 
 	return mutator;
 }
 
-/* Inserts data into the buffer. Data following insertion is displaced 
- * by size of inserted data. The buffer size is increased accordingly. */
-void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos
-		 uint8_t *new_data, size_t new_data_size) {
-	/* Increase buffer size to accomodate for inserted data */
-	*buf_size += new_data_size;
-	*buf = (uint8_t)realloc(*buf, *buf_size);
-	if (*buf == NULL) {
-		printf("data insertion failure");
-		return;
-	}
-	
-	/* Make space for inserted data */
-	memmove(*buf + insert_pos + new_data_size, 
-		*buf + insert_pos,
-		*buf_size - insert_pos - new_data_size);
-
-	/* Insert data into buffer */	
-	memcpy(*buf + insert_pos, new_data, new_data_size);
-}
-
-/* Finds string in buffer and returns its location */
-int findString(uint8_t *buf, size_t buf_size, const char *search_str) {
-	size_t search_str_len = strlen(search_str);	
-	for (size_t i = 0; i <= buf_size - search_str_len; i++)
-		if (memcmp(buf + i, search_str, search_str_len) == 0)
-			return (int)i;
-	return -1;
-}
-
-/* Deletes specified number of bytes from buffer at start location */
-void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes) {
-	size_t n_to_del = start + n_bytes > buf_size ? buf_size - start : n_bytes;
-	uint8_t *src = buf + start + n_to_del;
-	uint8_t *dest = buf + start;
-	size_t n_shift = buf_size - start - n_to_del;
-	memmove(dest, src, n_shift);
-}
-
-size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size, 
+size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 		       uint8_t **out_buf, uint8_t *add_buf, 
 		       size_t add_buf_size, size_t max_size) {
+		
+	/*TODO: double check that correct number of bytes are allocated */	
+	mutator->mutated_out = (uint8_t*)malloc(buf_size + 1);
+	mutator->mutated_out_size = buf_size;
+	memcpy(mutator->mutated_out, buf, buf_size);	
 	
-	size_t mutated_size = max_size; /*TODO: temporary size */
+	/* Remove integer declarations from file */	
+	int start_loc = findString(mutator->mutated_out, 
+				   mutator->mutated_out_size,
+				   "/* start */\n", 
+				   0);
+	int end_loc = findString(mutator->mutated_out,
+				 mutator->mutated_out_size,
+				 "/* end */\n", 
+				 start_loc);
+	deleteFromBuf(mutator->mutated_out, mutator->mutated_out_size, 
+		      start_loc + 12, end_loc - (start_loc + 12));
+
+	/* generate and insert integer declarations and values into file */
+	int cursor = start_loc + 12;	
+	for (int i = 0; i < N_OPNDS; i++) {
+		/* Get variable name as string */	
+		char *opnd_name_str = operandNameToStr((OperandName)i);
+
+		/* Generate variable value and its string representation */	
+		int type = mutator->mutator_state->opnd_type_map[i];
+		void *value = randomInteger((OperandDataType)type);
+		char *value_str = intToStr(value, (OperandDataType)type);
+
+		/* Get variable type name as string */
+		char *type_str = intTypeToStr(type);
+
+		/* Build string declaring variable and setting its value */
+		/* "\ttype name = value;\n" */	
+		int line_strlen = 1 + 
+			   strlen(type_str) + 1 +       
+			   strlen(opnd_name_str) + 3 +  
+			   strlen(value_str) + 2;
+		char *line = calloc(line_strlen + 1, sizeof(char));
+		strcat(line, "\t");
+		strcat(line, type_str);
+		strcat(line, " ");
+		strcat(line, opnd_name_str);
+		strcat(line, " = ");
+		strcat(line, value_str);
+		strcat(line, ";\n");
+		
+		/* Insert string into file buffer */	
+		insertData(&mutator->mutated_out, &mutator->mutated_out_size,
+			   (size_t)cursor, (uint8_t*)line, (size_t)line_strlen);
+
+		cursor += line_strlen; 
+
+		free(value);
+		free(value_str);
+		free(line);
+	}
 	
-	memcpy(mutator->mutated_out, buf, buf_size);
+	insertData(&mutator->mutated_out, &mutator->mutated_out_size, 
+		   (size_t)cursor, (uint8_t*)"\t", 1);
 
-	/* find each variable and its type in the file (buffer) */
-
-	/* for each found variable
-	 * 	set its type
-	 * 	generate and set its value
-	 * 	write new type and value to the buffer (as hex ideally)
-	 */
-
-	/* find the result variable and set its type (write to file) */
+	/* find the result variable and set its type */
 
 	/* find the beginning of the expression in the file */
 	
@@ -98,7 +113,7 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 
 	printf("%s\n", mutator->mutated_out);	
 	//memcpy(data->mutated_out, commands[rand() % 3], 3);
-	return mutated_size;
+	return mutator->mutated_out_size;
 }
 
 int main(int argc, char** argv) {
@@ -136,10 +151,49 @@ int main(int argc, char** argv) {
 	uint8_t *out_buf;
 	my_mutator_t *mutator = afl_custom_init(1);
 	size_t out_size = afl_custom_fuzz(mutator, (uint8_t*)file_buf, 
-			(size_t)length, &out_buf, 
+			(size_t)(length+1), &out_buf, 
 			NULL, 0, 8192);
 
 	fclose(file);
 
 	return 0;
+}
+
+/* Inserts data into the buffer. Data following insertion is displaced 
+ * by size of inserted data. The buffer size is increased accordingly. */
+void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
+		uint8_t *new_data, size_t new_data_size) {
+	/* Increase buffer size to accomodate for inserted data */
+	*buf_size += new_data_size;
+	*buf = (uint8_t*)realloc(*buf, *buf_size);
+	if (*buf == NULL) {
+		printf("data insertion failure");
+		return;
+	}
+	
+	/* Make space for inserted data */
+	memmove(*buf + insert_pos + new_data_size, 
+		*buf + insert_pos,
+		*buf_size - insert_pos - new_data_size);
+
+	/* Insert data into buffer */	
+	memcpy(*buf + insert_pos, new_data, new_data_size);
+}
+
+/* Finds string in buffer and returns its location */
+int findString(uint8_t *buf, size_t buf_size, const char *search_str, size_t start_pos) {
+	size_t search_str_len = strlen(search_str);	
+	for (size_t i = start_pos; i <= buf_size - search_str_len; i++)
+		if (memcmp(buf + i, search_str, search_str_len) == 0)
+			return (int)i;
+	return -1;
+}
+
+/* Deletes specified number of bytes from buffer at start location */
+void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes) {
+	size_t n_to_del = start + n_bytes > buf_size ? buf_size - start : n_bytes;
+	uint8_t *src = buf + start + n_to_del;
+	uint8_t *dest = buf + start;
+	size_t n_shift = buf_size - start - n_to_del;
+	memmove(dest, src, n_shift);
 }
