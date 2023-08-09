@@ -828,3 +828,69 @@ void *randomInteger(OperandDataType type) {
 	
 	return val;
 }
+
+char *intToStr(void *value, OperandDataType type) {
+	char *str;
+	switch (type) {
+		/* Unsigned */
+		case UI8:
+			str = malloc(4);
+			snprintf(str, 4, "%u", *(uint8_t*)value);
+			break;
+		case UI16:
+			str = malloc(6);
+			snprintf(str, 6, "%u", *(uint16_t*)value);
+			break;
+		case UI32:
+			str = malloc(11);
+			snprintf(str, 11, "%u", *(uint32_t*)value);
+			break;	
+		case UI64:
+			str = malloc(21);
+			snprintf(str, 21, "%lu", *(uint64_t*)value);
+			break;
+		/* Signed */
+		case I8:
+			str = malloc(5);
+			snprintf(str, 5, "%d", *(int8_t*)value);
+			break;
+		case I16:
+			str = malloc(7);
+			snprintf(str, 7, "%d", *(int16_t*)value);
+			break;
+		case I32:
+			str = malloc(12);
+			snprintf(str, 12, "%d", *(int32_t*)value);
+			break;
+		case I64:
+			str = malloc(21);
+			snprintf(str, 21, "%ld", *(int64_t*)value);
+			break;
+	}
+	return str;
+}
+
+char *intTypeToStr(OperandDataType type) {
+	switch (type) {
+		/* Unsigned */
+		case UI8:
+			return "uint8_t";
+		case UI16:
+			return "uint16_t";
+		case UI32:
+			return "uint32_t";	
+		case UI64:
+			return "uint64_t"
+		/* Signed */
+		case I8:
+			return "int8_t";
+		case I16:
+			return "int16_t";
+		case I32:
+			return "int32_t";
+		case I64:
+			return "int64_t";
+		default:
+			return "unknown_type";
+	}
+}

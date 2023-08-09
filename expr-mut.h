@@ -74,6 +74,8 @@ int getPrecedence(OperatorName operator_name);
 bool isLRAssociative(int precedence);
 
 void *randomInteger(OperandDataType type);
+char *intToStr(void *value, OperandDataType type);
+char *intTypeToStr(OperandDataType type);
 
 MutatorState *newMutatorState();
 void freeMutatorState(MutatorState **mutator_state);
@@ -92,11 +94,3 @@ void restoreUnusedOpnds(Node *root, MutatorState *state);
 void randomBranchSwap(Node *tree, unsigned int splitChance, unsigned int selectChance, unsigned int swap_attempts);
 void randomReplaceOptrs(Node *root);
 char *exprTreeToString(Node* root, int parent_precedence, int *out_str_len);
-
-
-
-
-
-
-
-
