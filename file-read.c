@@ -99,20 +99,59 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 		free(line);
 	}
 	
+	/* Create the result variable and its type */
+	char *type_str = intTypeToStr((OperandDataType)(rand() % N_TYPES));
+	char *line = calloc(strlen(type_str) + 12, sizeof(char));
+	strcat(line, "\t");
+	strcat(line, type_str);
+	strcat(line, " ");
+	strcat(line, "result;\n\t");
 	insertData(&mutator->mutated_out, &mutator->mutated_out_size, 
-		   (size_t)cursor, (uint8_t*)"\t", 1);
+		   (size_t)cursor, (uint8_t*)line, (size_t)strlen(line));
+	cursor += strlen(line);
+	free(line);	
 
-	/* find the result variable and set its type */
+	/* Find the beginning of the expression in the file */
+	int expr_begin = 9 + findString(mutator->mutated_out, 
+					mutator->mutated_out_size, 
+					"result", 
+					cursor);
+	int expr_end = findString(mutator->mutated_out, 
+				  mutator->mutated_out_size, 
+				  ";", 
+				  cursor);
 
-	/* find the beginning of the expression in the file */
+	/* Extract the expression as a string */
+	char *expr_str = calloc(expr_end - expr_begin + 1, sizeof(char));
+	memcpy(expr_str, mutator->mutated_out + expr_begin, expr_end - expr_begin);
+	trimExpr(expr_str);
+	char *cleaned_expr = removeUnmatchedParentheses(expr_str);
+	free(expr_str);
+
+	/* Parse and mutate the expression */	
+	Node *tree = parseExpr(cleaned_expr, cleaned_expr + strlen(cleaned_expr));
+	countOpndUses(tree, mutator->mutator_state);
+	restoreUnusedOpnds(tree, mutator->mutator_state);
+	randomBranchSwap(tree, 40, 50, 3);
+	randomReplaceOptrs(tree);
 	
-	/* extract the expression as a string */
+	/* Get the mutated expression as a string and write to buffer */
+	int mutated_expr_strln;
+	char *mutated_expr = exprTreeToString(tree, 16, &mutated_expr_strln);
+	
+	/* Overwrite the expression with the processed expression */
+	deleteFromBuf(mutator->mutated_out, mutator->mutated_out_size, 
+		      expr_begin , expr_end - expr_begin);
+	insertData(&mutator->mutated_out, &mutator->mutated_out_size, 
+		   (size_t)expr_begin, (uint8_t*)mutated_expr, (size_t)mutated_expr_strln);
 
-	/* process expression using expr-mut */
-	/* overwrite the expression with the processed expression */
+	free(mutated_expr);
+	free(cleaned_expr);
+	freeExprTree(&tree);
+	freeMutatorState(&mutator->mutator_state);
 
 	printf("%s\n", mutator->mutated_out);	
-	//memcpy(data->mutated_out, commands[rand() % 3], 3);
+	
 	return mutator->mutated_out_size;
 }
 
