@@ -5,10 +5,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#define MAX_FILE 8192
-
 typedef struct my_mutator {
+	afl_state_t *afl;
+	
+	size_t trim_size_current;
+	int trimming_steps;
+	int cur_step;
+
 	MutatorState *mutator_state;
+
 	uint8_t *mutated_out;
 	long unsigned int mutated_out_size;
 } my_mutator_t;
@@ -18,7 +23,7 @@ void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
 int findString(uint8_t *buf, size_t buf_size, const char *search_str, size_t start_pos);
 void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes);
 
-my_mutator_t *afl_custom_init(unsigned int seed) {
+my_mutator_t *afl_custom_init(afl_state_t *afl, unsigned int seed) {
 	srand(seed);
 
 	my_mutator_t *mutator = calloc(1, sizeof(my_mutator_t));
@@ -26,14 +31,14 @@ my_mutator_t *afl_custom_init(unsigned int seed) {
 		perror("afl_custom_int allocation failure");
 		return NULL;
 	}
-	/*	
-	if ((mutator->mutated_out = (uint8_t*)malloc(MAX_FILE)) == NULL) {
-		perror("afl_custom_init memory allocation failure");
-		return NULL;
-	}
-	*/
+	
+	mutator->post_process_buf = NULL;
+	mutator->trim_buf = NULL;
+	mutator->mutated_out = NULL;
 
 	mutator->mutator_state = newMutatorState();
+	
+	mutator->afl = afl;
 
 	return mutator;
 }
@@ -149,9 +154,14 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, uint8_t *buf, size_t buf_size,
 	free(cleaned_expr);
 	freeExprTree(&tree);
 	freeMutatorState(&mutator->mutator_state);
-
+	
+	if (max_size < mutator->mutated_out_size) {
+		printf("The mutated output is larger than the max size");
+		exit(0);
+	}
 	printf("%s\n", mutator->mutated_out);	
 	
+	*out_buf = mutator->mutated_out;	
 	return mutator->mutated_out_size;
 }
 
@@ -198,6 +208,11 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
+void afl_custom_deinit(my_mutator_t *mutator) {
+	free(mutator->mutated_out);
+	free(mutator);
+}
+
 /* Inserts data into the buffer. Data following insertion is displaced 
  * by size of inserted data. The buffer size is increased accordingly. */
 void insertData(uint8_t **buf, size_t *buf_size, size_t insert_pos,
@@ -236,3 +251,5 @@ void deleteFromBuf(uint8_t *buf, size_t buf_size, size_t start, size_t n_bytes) 
 	size_t n_shift = buf_size - start - n_to_del;
 	memmove(dest, src, n_shift);
 }
+
+
