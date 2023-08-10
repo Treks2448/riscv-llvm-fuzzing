@@ -65,13 +65,19 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, u8 *buf, size_t buf_size,
 				   0);
 	int end_loc = findString(mutator->mutated_out,
 				 mutator->mutated_out_size,
-				 "/* end */\n", 
+				 "/* end */", 
 				 start_loc);
+	if (start_loc == -1 || end_loc == -1) {
+		printf("Could not find start/end location in file buffer");
+		exit(1);
+	}
 	deleteFromBuf(mutator->mutated_out, mutator->mutated_out_size, 
 		      start_loc + 12, end_loc - (start_loc + 12));
 
 	/* generate and insert integer declarations and values into file */
-	int cursor = start_loc + 12;	
+	int cursor = start_loc + 12;
+	int max_type_strlen = 8; /* uint64_t */
+	int max_line_strlen = 39; /* "\tuint64_t x0 = 11110000111100001111;//\n" */
 	for (int i = 0; i < N_OPNDS; i++) {
 		/* Get variable name as string */	
 		char *opnd_name_str = operandNameToStr((OperandName)i);
@@ -85,25 +91,25 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, u8 *buf, size_t buf_size,
 		char *type_str = intTypeToStr(type);
 
 		/* Build string declaring variable and setting its value */
-		/* "\ttype name = value;\n" */	
-		int line_strlen = 1 + 
-			   strlen(type_str) + 1 +       
-			   strlen(opnd_name_str) + 3 +  
-			   strlen(value_str) + 2;
-		char *line = calloc(line_strlen + 1, sizeof(char));
+		/* "\ttype name = value;//\n" */		
+		char *line = calloc(max_line_strlen + 1, sizeof(char));
 		strcat(line, "\t");
 		strcat(line, type_str);
-		strcat(line, " ");
+		for (int i = 0, n = max_type_strlen - strlen(type_str) + 1; i < n; i++)
+			strcat(line, " ");
 		strcat(line, opnd_name_str);
 		strcat(line, " = ");
 		strcat(line, value_str);
-		strcat(line, ";\n");
+		strcat(line, ";//");	
+		for (int i = 0, n = max_line_strlen - strlen(line) - 1; i < n; i++)
+			strcat(line, "/");
+		strcat(line, "\n");
 		
 		/* Insert string into file buffer */	
 		insertData(&mutator->mutated_out, &mutator->mutated_out_size,
-			   (size_t)cursor, (u8*)line, (size_t)line_strlen);
+			   (size_t)cursor, (u8*)line, (size_t)max_line_strlen);
 
-		cursor += line_strlen; 
+		cursor += max_line_strlen; 
 
 		free(value);
 		free(value_str);
@@ -130,7 +136,11 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, u8 *buf, size_t buf_size,
 	int expr_end = findString(mutator->mutated_out, 
 				  mutator->mutated_out_size, 
 				  ";", 
-				  cursor);
+				  expr_begin);
+	if (expr_begin == -1 || expr_end == -1) {
+		printf("Could not find end/start location in file buffer");
+		exit(1);
+	}
 
 	/* Extract the expression as a string */
 	char *expr_str = calloc(expr_end - expr_begin + 1, sizeof(char));
@@ -163,7 +173,7 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, u8 *buf, size_t buf_size,
 	
 	if (max_size < mutator->mutated_out_size) {
 		printf("The mutated output is larger than the max size");
-		exit(0);
+		exit(1);
 	}
 	printf("%s\n", mutator->mutated_out);	
 	
@@ -225,9 +235,13 @@ void insertData(u8 **buf, size_t *buf_size, size_t insert_pos,
 		u8 *new_data, size_t new_data_size) {
 	/* Increase buffer size to accomodate for inserted data */
 	*buf_size += new_data_size;
+	if (insert_pos > *buf_size) {
+		printf("insert position outside of buffer in insertData");
+		return;
+	}
 	*buf = (u8*)realloc(*buf, *buf_size);
 	if (*buf == NULL) {
-		printf("data insertion failure");
+		printf("realloc failure in insertData");
 		return;
 	}
 	
@@ -235,13 +249,18 @@ void insertData(u8 **buf, size_t *buf_size, size_t insert_pos,
 	memmove(*buf + insert_pos + new_data_size, 
 		*buf + insert_pos,
 		*buf_size - insert_pos - new_data_size);
-
+	
 	/* Insert data into buffer */	
 	memcpy(*buf + insert_pos, new_data, new_data_size);
+	
 }
 
 /* Finds string in buffer and returns its location */
 int findString(u8 *buf, size_t buf_size, const char *search_str, size_t start_pos) {
+	if (start_pos >= buf_size) {
+		printf("start position outside of buffer in findString");
+		return -1;
+	}
 	size_t search_str_len = strlen(search_str);	
 	for (size_t i = start_pos; i <= buf_size - search_str_len; i++)
 		if (memcmp(buf + i, search_str, search_str_len) == 0)
