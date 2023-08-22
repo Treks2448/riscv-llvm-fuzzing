@@ -165,16 +165,27 @@ size_t afl_custom_fuzz(my_mutator_t *mutator, u8 *buf, size_t buf_size,
 		      expr_begin , expr_end - expr_begin);
 	insertData(&mutator->mutated_out, &mutator->mutated_out_size, 
 		   (size_t)expr_begin, (u8*)mutated_expr, (size_t)mutated_expr_strln);
+	/* Trim the buffer to end of main function */	
+	int fin_pos = findString(mutator->mutated_out, 
+		   mutator->mutated_out_size, 
+		   "/* finish */", 
+		   expr_end);
+	if (fin_pos == -1) {
+		printf("Could not find finish position in file");
+		exit(0);
+	}
+	mutator->mutated_out_size = fin_pos + 12;
+	mutator->mutated_out = realloc(mutator->mutated_out, mutator->mutated_out_size);
 
 	free(mutated_expr);
 	free(cleaned_expr);
 	freeExprTree(&tree);
-	freeMutatorState(&mutator->mutator_state);
 	
 	if (max_size < mutator->mutated_out_size) {
 		printf("The mutated output is larger than the max size");
 		exit(1);
 	}
+	
 	printf("%s\n", mutator->mutated_out);	
 	
 	*out_buf = mutator->mutated_out;	
@@ -224,7 +235,8 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-void afl_custom_deinit(my_mutator_t *mutator) {
+void afl_custom_deinit(my_mutator_t *mutator) {	
+	freeMutatorState(&mutator->mutator_state);
 	free(mutator->mutated_out);
 	free(mutator);
 }

@@ -10,7 +10,11 @@ typedef enum {OPERATOR, OPERAND} NodeType;
 /* Enum declaring variables (operands) used in arithmetic expression */
 /* Index of N_OPNDS denotes number of operands, so it must always come after the last operand
  * in the enum */
-typedef enum {OPND_X0, OPND_X1, OPND_X2, OPND_X3, OPND_X4, OPND_X5, OPND_X6, OPND_X7, N_OPNDS, INVALID_OPND} OperandName;
+typedef enum {OPND_X0, OPND_X1, OPND_X2, OPND_X3, 
+	      OPND_X4, OPND_X5, OPND_X6, OPND_X7, 
+	      OPND_X8, OPND_X9, OPND_X10, OPND_X11,
+	      OPND_X12, OPND_X13, OPND_X14, OPND_X15,
+	      N_OPNDS, INVALID_OPND} OperandName;
 
 /* Data types used in arithmetic expression */
 /* Index of N_TYPES denotes number of types, so it must always come after the last type in the 

@@ -65,14 +65,16 @@ void trimExpr(char *expr) {
 	while (str_it < str_end) {
 		OperandName opnd_name = strToOperandName(str_it, str_end);
 		if (opnd_name != INVALID_OPND) {
-			opnd_count++;
-			cutoff_point = str_it + 2;
-			if (opnd_count == N_OPNDS)
+			if (opnd_count == N_OPNDS) {
+				opnd_count++;
 				break;
+			}
+			opnd_count++;
+			cutoff_point = str_it + strlen(operandNameToStr(opnd_name));
 		}
 		str_it++;	
 	}
-	if (cutoff_point != NULL && cutoff_point < str_end) {
+	if (opnd_count > N_OPNDS && cutoff_point != NULL && cutoff_point < str_end) {
 		*cutoff_point = '\0';
 	}
 }
@@ -460,7 +462,7 @@ char *exprTreeToString(Node* root, int parent_precedence, int *out_str_len) {
 
 	/* Return operand name as string if node is operand */	
 	if (root->type == OPERAND) {
-		*out_str_len = 2;
+		*out_str_len = strlen(operandNameToStr(root->operand_name));
 		out_str = (char*)malloc(sizeof(char) * (*out_str_len + 2));
 		strcpy(out_str, operandNameToStr(root->operand_name));
 		return out_str;
@@ -689,6 +691,9 @@ bool isLRAssociative(int precedence) {
 		case 12:
 			return true;
 			break;	
+		default:
+			return true;
+			break;
 	}
 }
 
@@ -787,6 +792,30 @@ char *operandNameToStr(OperandName operand_name) {
 			break;
 		case OPND_X7:
 			return "x7";
+			break;
+		case OPND_X8:
+			return "x8";
+			break;
+		case OPND_X9:
+			return "x9";
+			break;
+		case OPND_X10:
+			return "x10";
+			break;
+		case OPND_X11:
+			return "x11";
+			break;
+		case OPND_X12:
+			return "x12";
+			break;
+		case OPND_X13:
+			return "x13";
+			break;
+		case OPND_X14:
+			return "x14";
+			break;
+		case OPND_X15:
+			return "x15";
 			break;
 		case INVALID_OPND:	
 			return "[]";
